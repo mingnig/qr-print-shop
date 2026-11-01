@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QR 인쇄소</title>
+<meta name="description" content="휴대폰에서 주소를 넣으면 QR 코드를 만들어 PNG·SVG 이미지로 저장합니다.">
+<meta property="og:title" content="QR 인쇄소">
+<meta property="og:description" content="우리 가게 QR, 휴대폰으로 바로 만드세요">
+<meta name="theme-color" content="#eef1f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1115" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: one phone-width column — address, proof with crop marks, tabbed settings, save bar pinned to the bottom edge */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #131820;
+  --muted: #5a6472;
+  --line: #d6dce3;
+  --accent: #00658f;
+  --accent-ink: #ffffff;
+  --warn: #8a5100;
+  --warn-bg: #fff2db;
+  --check-a: #ffffff;
+  --check-b: #e4e8ed;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --bar-h: 76px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1115; --surface: #161a20; --ink: #e6eaef; --muted: #959fac; --line: #2c333c;
+    --accent: #4db0de; --accent-ink: #06141c; --warn: #f0b660; --warn-bg: #2b2112;
+    --check-a: #1d2229; --check-b: #262c34; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1115; --surface: #161a20; --ink: #e6eaef; --muted: #959fac; --line: #2c333c;
+  --accent: #4db0de; --accent-ink: #06141c; --warn: #f0b660; --warn-bg: #2b2112;
+  --check-a: #1d2229; --check-b: #262c34; color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: calc(16px + env(safe-area-inset-top, 0px)) calc(var(--bar-h) + env(safe-area-inset-bottom, 0px) + 24px);
+}
+.wrap { max-width: 460px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em; }
+header p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+
+button, input, select { font: inherit; color: inherit; touch-action: manipulation; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* address */
+.addr { display: grid; gap: 6px; }
+.addr label { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em; color: var(--muted); }
+.addr-box { position: relative; }
+#url {
+  width: 100%; height: 52px; font-family: var(--font-mono); font-size: 16px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0 52px 0 14px;
+}
+#urlClear { position: absolute; top: 4px; right: 4px; width: 44px; height: 44px; border: 0; background: none; color: var(--muted); border-radius: 8px; font-size: 1.2rem; }
+.hint { font-size: 0.82rem; color: var(--muted); margin: 0; }
+
+/* proof */
+.proof { position: relative; padding: 18px; }
+.proof .cm { position: absolute; width: 16px; height: 16px; border: 0 solid var(--muted); }
+.cm.tl { top: 0; left: 0; border-width: 1px 0 0 1px; } .cm.tr { top: 0; right: 0; border-width: 1px 1px 0 0; }
+.cm.bl { bottom: 0; left: 0; border-width: 0 0 1px 1px; } .cm.br { bottom: 0; right: 0; border-width: 0 1px 1px 0; }
+.stage {
+  display: grid; place-items: center; aspect-ratio: 1 / 1; width: 100%; max-width: 100%; border-radius: 6px;
+  background-color: var(--check-a);
+  background-image: linear-gradient(45deg, var(--check-b) 25%, transparent 25%, transparent 75%, var(--check-b) 75%),
+                    linear-gradient(45deg, var(--check-b) 25%, transparent 25%, transparent 75%, var(--check-b) 75%);
+  background-size: 18px 18px; background-position: 0 0, 9px 9px;
+}
+#preview { display: block; max-width: 84%; max-height: 84%; width: auto; height: auto; box-shadow: 0 1px 3px rgba(0,0,0,.14); -webkit-touch-callout: default; }
+.empty { color: var(--muted); text-align: center; padding: 24px; }
+.meta { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; margin: 0; text-align: center; overflow-wrap: anywhere; }
+.warns { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.warns li { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 12px; font-size: 0.86rem; }
+
+/* tabs */
+.tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding: 2px 4px; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex: 1 0 auto; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); font-weight: 500; font-size: 0.92rem; white-space: nowrap;
+}
+.tab[aria-selected="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 16px; }
+.group { display: grid; gap: 8px; }
+.label { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em; color: var(--muted); }
+
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tiles.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tile { position: relative; display: grid; place-items: center; gap: 4px; min-height: 64px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 10px; text-align: center; cursor: pointer; font-size: 0.9rem; }
+.tile small { display: block; color: var(--muted); font-size: 0.75rem; }
+.tile input { position: absolute; opacity: 0; pointer-events: none; }
+.tile:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tile:has(input:checked) small { color: var(--accent); }
+.tile:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tile svg { width: 22px; height: 22px; }
+
+.swatches { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.swatch { aspect-ratio: 1; width: 100%; max-width: 52px; justify-self: center; border-radius: 50%; border: 1px solid var(--line); padding: 0; position: relative; overflow: hidden; }
+.swatch span { position: absolute; inset: 0; clip-path: polygon(0 0, 100% 0, 0 100%); }
+.swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.picker { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.picker input { width: 36px; height: 36px; border: 0; padding: 0; background: none; border-radius: 50%; cursor: pointer; flex: none; }
+.picker input::-webkit-color-swatch-wrapper { padding: 0; }
+.picker input::-webkit-color-swatch { border: 1px solid var(--line); border-radius: 50%; }
+.picker span { display: grid; font-size: 0.9rem; min-width: 0; }
+.picker code { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; }
+.switch input { appearance: none; width: 48px; height: 28px; border-radius: 14px; background: var(--line); position: relative; flex: none; cursor: pointer; margin: 0; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.switch input:checked { background: var(--accent); }
+.switch input:checked::after { left: 23px; }
+@media (prefers-reduced-motion: no-preference) { .switch input::after { transition: left .15s; } }
+
+.logo-row { display: flex; align-items: center; gap: 12px; }
+.thumb { width: 56px; height: 56px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); object-fit: contain; flex: none; }
+.logo-row .grow { flex: 1; min-width: 0; font-size: 0.88rem; color: var(--muted); overflow-wrap: anywhere; }
+.btn { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 500; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+label.btn { cursor: pointer; }
+label.btn input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+label.btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#caption { width: 100%; height: 52px; font-size: 16px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { min-height: 40px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font-size: 0.88rem; }
+
+.range { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; min-height: 44px; }
+.range output { font-family: var(--font-mono); font-size: 0.85rem; color: var(--muted); min-width: 4.5em; text-align: right; }
+input[type="range"] { width: 100%; height: 32px; accent-color: var(--accent); margin: 0; }
+
+/* save bar */
+.bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-top: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.bar-inner { max-width: 460px; margin: 0 auto; display: grid; gap: 6px; }
+.bar-btns { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; }
+.bar-btns .btn { min-height: 48px; }
+.status { margin: 0; font-size: 0.82rem; color: var(--muted); text-align: center; }
+
+/* long-press save sheet, for viewers who cannot use the save prompt */
+.save-sheet {
+  position: fixed; inset: 0; z-index: 20; background: var(--bg); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 14px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.save-sheet[hidden] { display: none; }
+.sheet-in { width: 100%; max-width: 460px; margin: 0 auto; display: grid; gap: 14px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-head h2 { margin: 0; font-size: 1.1rem; }
+.sheet-steps { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; font-size: 0.92rem; }
+#sheetImg {
+  display: block; width: 100%; height: auto; border-radius: 6px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto;
+  background-color: var(--check-a);
+  background-image: linear-gradient(45deg, var(--check-b) 25%, transparent 25%, transparent 75%, var(--check-b) 75%),
+                    linear-gradient(45deg, var(--check-b) 25%, transparent 25%, transparent 75%, var(--check-b) 75%);
+  background-size: 18px 18px; background-position: 0 0, 9px 9px;
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>QR 인쇄소</h1>
+    <p>주소를 넣으면 QR이 바로 그려집니다</p>
+  </header>
+
+  <div class="addr">
+    <label for="url">주소</label>
+    <div class="addr-box">
+      <input type="url" id="url" inputmode="url" enterkeyhint="done" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://" value="https://www.example.com/menu">
+      <button type="button" id="urlClear" aria-label="주소 지우기">✕</button>
+    </div>
+    <p class="hint" id="urlHint">예시 주소입니다. 내 주소로 바꿔 넣으세요.</p>
+  </div>
+
+  <section aria-label="미리보기" style="display:grid;gap:10px">
+    <div class="proof">
+      <span class="cm tl"></span><span class="cm tr"></span><span class="cm bl"></span><span class="cm br"></span>
+      <div class="stage">
+        <img id="preview" alt="" hidden>
+        <div class="empty" id="empty" hidden>주소를 넣으면 여기에 QR이 나타납니다.</div>
+      </div>
+    </div>
+    <p class="meta" id="meta"></p>
+    <ul class="warns" id="warns"></ul>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="꾸미기">
+    <button type="button" class="tab" role="tab" id="tab-shape" aria-controls="panel-shape" aria-selected="true">모양</button>
+    <button type="button" class="tab" role="tab" id="tab-color" aria-controls="panel-color" aria-selected="false" tabindex="-1">색</button>
+    <button type="button" class="tab" role="tab" id="tab-logo" aria-controls="panel-logo" aria-selected="false" tabindex="-1">로고</button>
+    <button type="button" class="tab" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false" tabindex="-1">문구</button>
+    <button type="button" class="tab" role="tab" id="tab-size" aria-controls="panel-size" aria-selected="false" tabindex="-1">크기</button>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <div class="panel" role="tabpanel" id="panel-shape" aria-labelledby="tab-shape">
+      <div class="group">
+        <span class="label" id="lbl-style">점 모양</span>
+        <div class="tiles" role="radiogroup" aria-labelledby="lbl-style">
+          <label class="tile"><input type="radio" name="style" id="style-square" value="square" checked><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" fill="currentColor"/><rect x="9" y="2" width="5" height="5" fill="currentColor"/><rect x="2" y="9" width="5" height="5" fill="currentColor"/></svg>사각</label>
+          <label class="tile"><input type="radio" name="style" id="style-rounded" value="rounded"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.8" fill="currentColor"/><rect x="9" y="2" width="5" height="5" rx="1.8" fill="currentColor"/><rect x="2" y="9" width="5" height="5" rx="1.8" fill="currentColor"/></svg>둥근</label>
+          <label class="tile"><input type="radio" name="style" id="style-dots" value="dots"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4.5" cy="4.5" r="2.4" fill="currentColor"/><circle cx="11.5" cy="4.5" r="2.4" fill="currentColor"/><circle cx="4.5" cy="11.5" r="2.4" fill="currentColor"/></svg>점</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-color" aria-labelledby="tab-color" hidden>
+      <div class="group">
+        <span class="label">추천 조합</span>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div class="colors">
+        <label class="picker"><input type="color" id="fg" value="#111111"><span>QR 색<code id="fgCode">#111111</code></span></label>
+        <label class="picker"><input type="color" id="bg" value="#ffffff"><span>배경 색<code id="bgCode">#ffffff</code></span></label>
+      </div>
+      <label class="switch"><span>배경 투명하게<br><small class="hint">다른 그림 위에 얹을 때 씁니다</small></span><input type="checkbox" id="transparent" role="switch"></label>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-logo" aria-labelledby="tab-logo" hidden>
+      <div class="logo-row">
+        <img class="thumb" id="thumb" alt="" hidden>
+        <span class="grow" id="logoText">가운데에 가게 로고를 넣을 수 있습니다. 배경이 투명한 PNG가 가장 깔끔합니다.</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="btn primary" style="flex:1"><input type="file" id="logo" accept="image/*">사진 고르기</label>
+        <button type="button" class="btn" id="logoClear" hidden>빼기</button>
+      </div>
+      <div class="group" id="logoSizeRow" hidden>
+        <label class="label" for="logoSize">로고 크기</label>
+        <div class="range"><input type="range" id="logoSize" min="14" max="28" step="1" value="22"><output id="logoSizeOut" for="logoSize">22%</output></div>
+      </div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-text" aria-labelledby="tab-text" hidden>
+      <div class="group">
+        <label class="label" for="caption">QR 아래 문구</label>
+        <input type="text" id="caption" maxlength="30" enterkeyhint="done" placeholder="비워 두면 문구 없이 만듭니다">
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-size" aria-labelledby="tab-size" hidden>
+      <div class="group">
+        <span class="label" id="lbl-size">이미지 크기</span>
+        <div class="tiles four" role="radiogroup" aria-labelledby="lbl-size">
+          <label class="tile"><input type="radio" name="size" value="512">512 px<small>카톡·웹</small></label>
+          <label class="tile"><input type="radio" name="size" value="1024" checked>1024 px<small>SNS</small></label>
+          <label class="tile"><input type="radio" name="size" value="2048">2048 px<small>전단·포스터</small></label>
+          <label class="tile"><input type="radio" name="size" value="4096">4096 px<small>현수막</small></label>
+        </div>
+      </div>
+      <div class="group">
+        <span class="label" id="lbl-ecc">훼손 대비</span>
+        <div class="tiles four" role="radiogroup" aria-labelledby="lbl-ecc">
+          <label class="tile"><input type="radio" name="ecc" value="L">낮음<small>7%까지 읽힘</small></label>
+          <label class="tile"><input type="radio" name="ecc" value="M" checked>보통<small>15%까지 읽힘</small></label>
+          <label class="tile"><input type="radio" name="ecc" value="Q">높음<small>25%까지 읽힘</small></label>
+          <label class="tile"><input type="radio" name="ecc" value="H">최고<small>30%까지 읽힘</small></label>
+        </div>
+        <p class="hint">QR 일부가 가려지거나 더러워져도 읽히는 정도입니다. 높일수록 점이 촘촘해집니다.</p>
+      </div>
+      <div class="group">
+        <label class="label" for="margin">테두리 여백</label>
+        <div class="range"><input type="range" id="margin" min="0" max="8" step="1" value="4"><output id="marginOut" for="margin">4칸</output></div>
+        <p class="hint">4칸이 표준입니다. 줄이면 다른 그림에 붙이기 편하지만 인식이 떨어질 수 있습니다.</p>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="bar">
+  <div class="bar-inner">
+    <p class="status" id="status" role="status" hidden></p>
+    <div class="bar-btns">
+      <button type="button" class="btn primary" id="savePng">PNG 저장</button>
+      <button type="button" class="btn" id="saveSvg">SVG</button>
+      <button type="button" class="btn" id="copyImg">복사</button>
+    </div>
+  </div>
+</div>
+
+<div class="save-sheet" id="saveSheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">이미지를 길게 눌러 저장하세요</h2>
+      <button type="button" class="btn" id="sheetClose">닫기</button>
+    </div>
+    <ol class="sheet-steps">
+      <li>아래 QR 이미지를 손가락으로 길게 누릅니다.</li>
+      <li>아이폰은 '사진 앱에 저장', 안드로이드는 '이미지 다운로드'를 누릅니다.</li>
+    </ol>
+    <p class="hint" id="sheetNote" hidden></p>
+    <img id="sheetImg" alt="">
+    <p class="meta" id="sheetMeta"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const els = {
+    url: $('url'), urlHint: $('urlHint'), urlClear: $('urlClear'), fg: $('fg'), bg: $('bg'), fgCode: $('fgCode'), bgCode: $('bgCode'),
+    transparent: $('transparent'), logo: $('logo'), thumb: $('thumb'), logoText: $('logoText'), logoClear: $('logoClear'),
+    logoSize: $('logoSize'), logoSizeOut: $('logoSizeOut'), logoSizeRow: $('logoSizeRow'),
+    caption: $('caption'), chips: $('chips'), margin: $('margin'), marginOut: $('marginOut'),
+    preview: $('preview'), empty: $('empty'), meta: $('meta'), warns: $('warns'), status: $('status'),
+    savePng: $('savePng'), saveSvg: $('saveSvg'), copyImg: $('copyImg'), swatches: $('swatches'),
+    sheet: $('saveSheet'), sheetImg: $('sheetImg'), sheetMeta: $('sheetMeta'), sheetNote: $('sheetNote'), sheetClose: $('sheetClose')
+  };
+  const EXAMPLE = 'https://www.example.com/menu';
+  const ECC_NAME = { L: '낮음', M: '보통', Q: '높음', H: '최고' };
+  const FONT = '"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+  const PREVIEW_MAX = 1024;
+  const PRESETS = [
+    ['#111111', '#ffffff', '검정'], ['#1b2a63', '#ffffff', '남색'], ['#0f4d33', '#f2f6f1', '진초록'],
+    ['#6e1430', '#fff6f4', '버건디'], ['#3b2a1a', '#f6efe4', '커피'], ['#004e6e', '#e8f4f8', '청록']
+  ];
+  const CAPTIONS = ['메뉴판 보기', '와이파이 연결', '리뷰 남기기', '예약하기', '인스타그램', '주문하기'];
+
+  let logoImg = null, logoSrc = null, current = null, queued = false, pngCache = null, prepTimer = 0;
+
+  const showStatus = t => { els.status.textContent = t; els.status.hidden = !t; };
+
+  if (typeof qrcode === 'undefined') {
+    els.empty.hidden = false;
+    els.empty.textContent = 'QR 도구를 불러오지 못했습니다. 페이지를 새로 고쳐 주세요.';
+    return;
+  }
+  // encode text as UTF-8 so Korean paths and query strings scan correctly
+  qrcode.stringToBytes = s => Array.from(new TextEncoder().encode(s));
+
+  // ---- static controls ----
+  PRESETS.forEach(([fg, bg, name]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'swatch'; b.setAttribute('aria-label', name + ' 조합');
+    b.dataset.fg = fg; b.dataset.bg = bg; b.style.background = bg;
+    const s = document.createElement('span'); s.style.background = fg; b.appendChild(s);
+    b.addEventListener('click', () => { els.fg.value = fg; els.bg.value = bg; els.transparent.checked = false; schedule(); });
+    els.swatches.appendChild(b);
+  });
+  CAPTIONS.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = t;
+    b.addEventListener('click', () => { els.caption.value = t; schedule(); });
+    els.chips.appendChild(b);
+  });
+
+  // ---- tabs ----
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  function selectTab(tab, focus) {
+    tabs.forEach(t => {
+      const on = t === tab;
+      t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1;
+      $(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) tab.focus();
+    tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    try { localStorage.setItem(KEY + ':tab', tab.id); } catch (e) {}
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => selectTab(t));
+    t.addEventListener('keydown', e => {
+      const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { e.preventDefault(); selectTab(tabs[(i + d + tabs.length) % tabs.length], true); }
+    });
+  });
+
+  // ---- settings memory (per viewer, optional) ----
+  const KEY = 'qr-print-shop:v2';
+  const fields = ['url', 'fg', 'bg', 'caption', 'margin', 'logoSize'];
+  const radios = ['style', 'size', 'ecc'];
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (saved) {
+      fields.forEach(f => { if (saved[f] != null) els[f].value = saved[f]; });
+      radios.forEach(r => { const el = document.querySelector(`input[name="${r}"][value="${saved[r]}"]`); if (el) el.checked = true; });
+      els.transparent.checked = !!saved.transparent;
+    }
+    const t = $(localStorage.getItem(KEY + ':tab') || '');
+    if (t && t.getAttribute('role') === 'tab') selectTab(t);
+  } catch (e) {}
+  function remember() {
+    try {
+      const o = { transparent: els.transparent.checked };
+      fields.forEach(f => o[f] = els[f].value);
+      radios.forEach(r => o[r] = radio(r));
+      localStorage.setItem(KEY, JSON.stringify(o));
+    } catch (e) {}
+  }
+  const radio = name => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
+
+  function normalizeUrl(raw) {
+    const t = raw.trim();
+    if (!t) return { text: '', note: '' };
+    if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return { text: t, note: '' };
+    if (/^[^\s]+\.[^\s]{2,}/.test(t)) return { text: 'https://' + t, note: '앞에 https:// 를 붙여서 만들었습니다.' };
+    return { text: t, note: '주소 형식이 아니라 글자 그대로 담았습니다. 스캔하면 이 글자가 보입니다.' };
+  }
+
+  // ---- geometry in module units, shared by canvas and SVG ----
+  const rr = (x, y, w, h, r) => {
+    if (r <= 0) return `M${x} ${y}h${w}v${h}h${-w}z`;
+    return `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${-(w - 2 * r)}a${r} ${r} 0 0 1 ${-r} ${-r}v${-(h - 2 * r)}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+  };
+  const circ = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0z`;
+
+  function build(text, opts) {
+    const qr = qrcode(0, opts.ecc);
+    qr.addData(text, 'Byte');
+    qr.make();
+    const n = qr.getModuleCount();
+    const q = opts.margin;
+    const total = n + 2 * q;
+    const inFinder = (r, c) => (r < 7 && c < 7) || (r < 7 && c >= n - 7) || (r >= n - 7 && c < 7);
+
+    let logo = null;
+    if (opts.logo) {
+      let L = Math.round(n * opts.logoFrac);
+      if ((n - L) % 2) L += 1;
+      logo = { s: (n - L) / 2, L };
+    }
+    const inLogo = (r, c) => logo && r >= logo.s && r < logo.s + logo.L && c >= logo.s && c < logo.s + logo.L;
+
+    let mods = '';
+    for (let r = 0; r < n; r++) {
+      if (opts.style === 'square') {
+        let c = 0;
+        while (c < n) {
+          if (qr.isDark(r, c) && !inFinder(r, c) && !inLogo(r, c)) {
+            let e = c; while (e + 1 < n && qr.isDark(r, e + 1) && !inFinder(r, e + 1) && !inLogo(r, e + 1)) e++;
+            mods += rr(q + c, q + r, e - c + 1, 1, 0); c = e + 1;
+          } else c++;
+        }
+      } else {
+        for (let c = 0; c < n; c++) {
+          if (!qr.isDark(r, c) || inFinder(r, c) || inLogo(r, c)) continue;
+          mods += opts.style === 'dots' ? circ(q + c + 0.5, q + r + 0.5, 0.42) : rr(q + c + 0.04, q + r + 0.04, 0.92, 0.92, 0.34);
+        }
+      }
+    }
+    const round = opts.style !== 'square';
+    let rings = '', eyes = '';
+    [[0, 0], [0, n - 7], [n - 7, 0]].forEach(([r, c]) => {
+      const x = q + c, y = q + r;
+      rings += rr(x, y, 7, 7, round ? 2.2 : 0) + rr(x + 1, y + 1, 5, 5, round ? 1.4 : 0);
+      eyes += opts.style === 'dots' ? circ(x + 3.5, y + 3.5, 1.55) : rr(x + 2, y + 2, 3, 3, round ? 0.95 : 0);
+    });
+    return { n, q, total, mods, rings, eyes, logo: logo && { x: q + logo.s, y: q + logo.s, L: logo.L }, version: (n - 17) / 4 };
+  }
+
+  // ---- canvas render ----
+  function drawCanvas(g, opts, target) {
+    const cell = Math.max(1, Math.floor(target / g.total));
+    const off = Math.floor((target - cell * g.total) / 2);
+    const capH = opts.caption ? Math.round(target * 0.13) : 0;
+    const cv = document.createElement('canvas');
+    cv.width = target; cv.height = target + capH;
+    const ctx = cv.getContext('2d');
+    if (!opts.transparent) { ctx.fillStyle = opts.bg; ctx.fillRect(0, 0, cv.width, cv.height); }
+    ctx.save();
+    ctx.translate(off, off); ctx.scale(cell, cell);
+    ctx.fillStyle = opts.fg;
+    ctx.fill(new Path2D(g.mods));
+    ctx.fill(new Path2D(g.rings), 'evenodd');
+    ctx.fill(new Path2D(g.eyes));
+    if (g.logo && logoImg) {
+      const { x, y, L } = g.logo;
+      if (!opts.transparent) { ctx.fillStyle = opts.bg; ctx.fill(new Path2D(rr(x, y, L, L, Math.min(1.2, L / 6)))); }
+      const pad = 0.6, box = L - pad * 2;
+      const ratio = logoImg.naturalWidth / logoImg.naturalHeight || 1;
+      const w = ratio >= 1 ? box : box * ratio, h = ratio >= 1 ? box / ratio : box;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(logoImg, x + pad + (box - w) / 2, y + pad + (box - h) / 2, w, h);
+    }
+    ctx.restore();
+    if (opts.caption) {
+      let fs = Math.round(target * 0.062);
+      ctx.font = `500 ${fs}px ${FONT}`;
+      const maxW = target * 0.88;
+      const tw = ctx.measureText(opts.caption).width;
+      if (tw > maxW) { fs = Math.floor(fs * maxW / tw); ctx.font = `500 ${fs}px ${FONT}`; }
+      ctx.fillStyle = opts.fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const qrBottom = off + cell * (g.total - g.q);
+      const cy = Math.min(target + capH / 2, (qrBottom + target + capH) / 2);
+      ctx.fillText(opts.caption, target / 2, cy);
+    }
+    return cv;
+  }
+
+  // ---- SVG render ----
+  const esc = s => s.replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  function toSvg(g, opts) {
+    const T = g.total, capH = opts.caption ? T * 0.13 : 0;
+    const crisp = opts.style === 'square' ? ' shape-rendering="crispEdges"' : '';
+    let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${T} ${+(T + capH).toFixed(3)}" width="${opts.size}" height="${Math.round(opts.size * (T + capH) / T)}">`;
+    if (!opts.transparent) s += `<rect width="100%" height="100%" fill="${opts.bg}"/>`;
+    s += `<g fill="${opts.fg}"${crisp}><path d="${g.mods}"/><path fill-rule="evenodd" d="${g.rings}"/><path d="${g.eyes}"/></g>`;
+    if (g.logo && logoSrc) {
+      const { x, y, L } = g.logo, pad = 0.6;
+      if (!opts.transparent) s += `<path fill="${opts.bg}" d="${rr(x, y, L, L, Math.min(1.2, L / 6))}"/>`;
+      s += `<image href="${logoSrc}" x="${x + pad}" y="${y + pad}" width="${L - 2 * pad}" height="${L - 2 * pad}" preserveAspectRatio="xMidYMid meet"/>`;
+    }
+    if (opts.caption) {
+      const qrBottom = T - g.q;
+      const cy = Math.min(T + capH / 2, (qrBottom + T + capH) / 2);
+      s += `<text x="${T / 2}" y="${cy.toFixed(3)}" fill="${opts.fg}" font-family='${FONT}' font-weight="500" font-size="${(T * 0.062).toFixed(3)}" text-anchor="middle" dominant-baseline="central">${esc(opts.caption)}</text>`;
+    }
+    return s + '</svg>';
+  }
+
+  // ---- checks ----
+  function lum(hex) {
+    const v = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+  }
+  function warnings(opts, g) {
+    const w = [];
+    if (!opts.transparent) {
+      const a = lum(opts.fg), b = lum(opts.bg);
+      const ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      if (a > b) w.push('QR이 배경보다 밝습니다. 색이 뒤집힌 QR은 일부 카메라 앱이 읽지 못합니다.');
+      if (ratio < 4) w.push(`QR과 배경의 명암 차이가 작습니다 (${ratio.toFixed(1)}:1). 4:1 이상이어야 잘 읽힙니다.`);
+    } else if (lum(opts.fg) > 0.4) {
+      w.push('배경이 투명한데 QR 색이 밝습니다. 어두운 바탕 위에 올릴 때만 쓰세요.');
+    }
+    if (opts.logo && (opts.ecc === 'L' || opts.ecc === 'M')) w.push('로고가 QR 일부를 가립니다. 크기 탭에서 훼손 대비를 높음이나 최고로 올리세요.');
+    if (opts.logo && opts.ecc === 'Q' && opts.logoFrac > 0.22) w.push('로고가 큰 편입니다. 훼손 대비를 최고로 올리세요.');
+    if (opts.margin < 2) w.push('테두리 여백이 좁습니다. 붙일 곳의 바탕이 밝고 단순할 때만 잘 읽힙니다.');
+    if (g && g.version >= 15) w.push('담은 글자가 길어 점이 촘촘합니다. 작게 인쇄하면 읽기 어려우니 단축 주소를 쓰세요.');
+    return w;
+  }
+
+  function readOpts() {
+    const norm = normalizeUrl(els.url.value);
+    return {
+      text: norm.text, note: norm.note, style: radio('style') || 'square', fg: els.fg.value, bg: els.bg.value,
+      transparent: els.transparent.checked, logo: !!logoImg, logoFrac: +els.logoSize.value / 100,
+      caption: els.caption.value.trim(), ecc: radio('ecc') || 'M', size: +(radio('size') || 1024), margin: +els.margin.value
+    };
+  }
+
+  function schedule() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => { queued = false; render(); });
+  }
+
+  function render() {
+    const o = readOpts();
+    els.marginOut.textContent = o.margin + '칸';
+    els.logoSizeOut.textContent = els.logoSize.value + '%';
+    els.fgCode.textContent = o.fg; els.bgCode.textContent = o.bg;
+    els.swatches.querySelectorAll('.swatch').forEach(b => b.setAttribute('aria-pressed', !o.transparent && b.dataset.fg === o.fg && b.dataset.bg === o.bg));
+    els.urlHint.textContent = o.note || (els.url.value.trim() === EXAMPLE ? '예시 주소입니다. 내 주소로 바꿔 넣으세요.' : '');
+    els.urlHint.hidden = !els.urlHint.textContent;
+    els.urlClear.hidden = !els.url.value;
+    remember();
+    const setActions = on => [els.savePng, els.saveSvg, els.copyImg].forEach(b => b.disabled = !on);
+    const fail = msg => {
+      current = null; els.preview.hidden = true; els.empty.hidden = false; els.empty.textContent = msg;
+      els.meta.textContent = ''; els.warns.replaceChildren(); setActions(false);
+    };
+
+    if (!o.text) return fail('주소를 넣으면 여기에 QR이 나타납니다.');
+    let g;
+    try { g = build(o.text, o); }
+    catch (e) { return fail('글자가 너무 길어 QR 하나에 담기지 않습니다. 단축 주소를 쓰거나 훼손 대비를 낮추세요.'); }
+
+    const cv = drawCanvas(g, o, Math.min(o.size, PREVIEW_MAX));
+    current = { g, o };
+    // a data: URL (not blob:) so a long press on the preview can save it on phones
+    els.preview.src = cv.toDataURL('image/png');
+    // render the full-size PNG once settings settle, so the iPhone share sheet opens straight from the tap
+    pngCache = null;
+    clearTimeout(prepTimer);
+    prepTimer = setTimeout(() => {
+      const snap = current;
+      drawCanvas(snap.g, snap.o, snap.o.size).toBlob(b => { if (b && current === snap) pngCache = { snap, blob: b }; }, 'image/png');
+    }, 450);
+    els.preview.alt = 'QR 코드: ' + o.text;
+    els.preview.hidden = false; els.empty.hidden = true;
+    const h = o.caption ? o.size + Math.round(o.size * 0.13) : o.size;
+    els.meta.textContent = `버전 ${g.version} · ${g.n}×${g.n}칸 · 훼손 대비 ${ECC_NAME[o.ecc]} · ${o.size}×${h} px`;
+    els.warns.replaceChildren(...warnings(o, g).map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+    setActions(true);
+  }
+
+  // ---- logo ----
+  function resetLogo() {
+    logoImg = null; logoSrc = null; els.logo.value = '';
+    els.thumb.hidden = true; els.logoClear.hidden = true; els.logoSizeRow.hidden = true;
+    els.logoText.textContent = '가운데에 가게 로고를 넣을 수 있습니다. 배경이 투명한 PNG가 가장 깔끔합니다.';
+  }
+  els.logo.addEventListener('change', () => {
+    const file = els.logo.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { showStatus('이미지 파일만 넣을 수 있습니다.'); return; }
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        logoImg = img; logoSrc = fr.result;
+        els.thumb.src = logoSrc; els.thumb.hidden = false; els.logoClear.hidden = false; els.logoSizeRow.hidden = false;
+        els.logoText.textContent = file.name;
+        const raised = radio('ecc') === 'L' || radio('ecc') === 'M';
+        if (raised) document.querySelector('input[name="ecc"][value="H"]').checked = true;
+        render();
+        if (raised) showStatus('로고가 가리는 부분을 메우려고 훼손 대비를 최고로 올렸습니다.');
+      };
+      img.onerror = () => showStatus('이 사진을 읽지 못했습니다. PNG나 JPG로 다시 골라 주세요.');
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+  els.logoClear.addEventListener('click', () => { resetLogo(); render(); });
+
+  // ---- save / copy ----
+  function baseName(o) {
+    try { return 'qr-' + new URL(o.text).hostname.replace(/^www\./, '').replace(/[^a-z0-9.-]/gi, '_'); }
+    catch (e) { return 'qr-code'; }
+  }
+  const fullBlob = () => new Promise(res => drawCanvas(current.g, current.o, current.o.size).toBlob(res, 'image/png'));
+
+  const UA = navigator.userAgent;
+  // in-app browsers (KakaoTalk, Naver, Instagram, Facebook, Line, Android WebView) usually block file downloads
+  const IN_APP = /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|Line\/|DaumApps|; wv\)/i.test(UA);
+  const IOS = /iPhone|iPad|iPod/.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const pngBlob = () => (pngCache && pngCache.snap === current) ? Promise.resolve(pngCache.blob) : fullBlob();
+
+  let sheetOpener = null;
+  function openSheet(kind) {
+    const { g, o } = current;
+    const cv = drawCanvas(g, o, o.size);
+    els.sheetImg.src = cv.toDataURL('image/png');
+    els.sheetImg.alt = 'QR 코드: ' + o.text;
+    els.sheetMeta.textContent = `${baseName(o)}.png · ${cv.width}×${cv.height} px`;
+    els.sheetNote.textContent = kind === 'svg' ? '이 화면에서는 SVG 파일을 받을 수 없어 같은 크기의 PNG로 보여 드립니다.' : '';
+    els.sheetNote.hidden = kind !== 'svg';
+    sheetOpener = document.activeElement;
+    els.sheet.hidden = false;
+    els.sheet.scrollTop = 0;
+    document.documentElement.style.overflow = 'hidden';
+    els.sheetClose.focus();
+  }
+  function closeSheet() {
+    els.sheet.hidden = true;
+    els.sheetImg.removeAttribute('src');
+    document.documentElement.style.overflow = '';
+    if (sheetOpener && sheetOpener.focus) sheetOpener.focus();
+  }
+  els.sheetClose.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !els.sheet.hidden) closeSheet(); });
+
+  async function save(kind) {
+    if (!current) return;
+    const { g, o } = current;
+    const filename = baseName(o) + '.' + kind;
+    if (IN_APP) return openSheet(kind);
+    const blob = kind === 'png' ? await pngBlob() : new Blob([toSvg(g, o)], { type: 'image/svg+xml' });
+    // iPhone: the share sheet has '이미지 저장', which goes straight into Photos
+    if (IOS && navigator.canShare) {
+      const file = new File([blob], filename, { type: blob.type });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file] }); return showStatus('사진 앱이나 파일 앱에서 확인하세요.'); }
+        catch (e) {
+          if (e && e.name === 'AbortError') return showStatus('저장을 취소했습니다.');
+          return openSheet(kind);
+        }
+      }
+    }
+    try {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      showStatus(filename + ' 내려받기를 시작했습니다. 안 되면 미리보기를 길게 눌러 저장하세요.');
+    } catch (e) {
+      openSheet(kind);
+    }
+  }
+  els.savePng.addEventListener('click', () => save('png'));
+  els.saveSvg.addEventListener('click', () => save('svg'));
+  els.copyImg.addEventListener('click', async () => {
+    if (!current) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob() })]);
+      showStatus('이미지를 복사했습니다. 카톡이나 문서에 붙여 넣으세요.');
+    } catch (e) {
+      showStatus('이 화면에서는 이미지 복사가 막혀 있습니다. PNG 저장을 눌러 주세요.');
+    }
+  });
+
+  // ---- wire up ----
+  els.urlClear.addEventListener('click', () => { els.url.value = ''; els.url.focus(); schedule(); });
+  els.url.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); els.url.blur(); } });
+  $('form').addEventListener('submit', e => e.preventDefault());
+  [els.url, $('form')].forEach(el => {
+    el.addEventListener('input', e => { if (e.target !== els.logo) { showStatus(''); schedule(); } });
+    el.addEventListener('change', e => { if (e.target !== els.logo) { showStatus(''); schedule(); } });
+  });
+
+  render();
+  if (document.fonts && document.fonts.load) document.fonts.load(`500 40px ${FONT}`, '메뉴판 보기').then(schedule, () => {});
+})();
+</script>
+</body>
+</html>
